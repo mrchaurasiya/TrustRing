@@ -89,7 +89,13 @@ class TrustRingCallScreeningService : CallScreeningService() {
             val startTime = startHour * 60 + startMinute
             val endTime = endHour * 60 + endMinute
 
-            currentTime in startTime..endTime
+            if (startTime <= endTime) {
+                // Same-day schedule (e.g., 9 AM to 5 PM)
+                currentTime in startTime..endTime
+            } else {
+                // Overnight schedule (e.g., 10 PM to 7 AM)
+                currentTime >= startTime || currentTime <= endTime
+            }
         } catch (e: Exception) {
             true
         }

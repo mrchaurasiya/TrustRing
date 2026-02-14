@@ -12,9 +12,9 @@ const Tab = createBottomTabNavigator();
 
 const TabIcon = ({label, focused}: {label: string; focused: boolean}) => {
   const icons: Record<string, string> = {
-    Home: '🛡️',
+    Recents: '📞',
+    Shield: '🛡️',
     Schedule: '⏰',
-    Log: '📋',
     Settings: '⚙️',
   };
   return (
@@ -66,19 +66,19 @@ export default function AppNavigator() {
           },
         })}>
         <Tab.Screen
-          name="Home"
-          component={HomeScreen}
+          name="Recents"
+          component={LogScreen}
           options={{title: 'TrustRing'}}
+        />
+        <Tab.Screen
+          name="Shield"
+          component={HomeScreen}
+          options={{title: 'Protection'}}
         />
         <Tab.Screen
           name="Schedule"
           component={ScheduleScreen}
           options={{title: 'Schedule'}}
-        />
-        <Tab.Screen
-          name="Log"
-          component={LogScreen}
-          options={{title: 'Blocked Calls'}}
         />
         <Tab.Screen
           name="Settings"

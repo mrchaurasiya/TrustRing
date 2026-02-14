@@ -177,7 +177,7 @@ export default function SettingsScreen() {
             <Text style={styles.aboutIcon}>🛡️</Text>
           </View>
           <Text style={styles.aboutName}>TrustRing</Text>
-          <Text style={styles.aboutVersion}>Version 2.0.0</Text>
+          <Text style={styles.aboutVersion}>Version 2.0.1</Text>
           <View style={styles.aboutDivider} />
           <Text style={styles.aboutDesc}>
             Block calls from numbers not in your phonebook during scheduled

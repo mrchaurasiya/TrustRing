@@ -31,8 +31,9 @@ class TrustRingCallScreeningService : CallScreeningService() {
         }
 
         val isKnown = isNumberInContacts(phoneNumber)
+        val isWhitelisted = isNumberWhitelisted(prefs, phoneNumber)
 
-        if (isKnown) {
+        if (isKnown || isWhitelisted) {
             // Allow the call
             respondToCall(callDetails, CallResponse.Builder().build())
         } else {
@@ -63,6 +64,23 @@ class TrustRingCallScreeningService : CallScreeningService() {
             false
         } finally {
             cursor?.close()
+        }
+    }
+
+    private fun isNumberWhitelisted(prefs: SharedPreferences, phoneNumber: String): Boolean {
+        val whitelistJson = prefs.getString("whitelist", "[]") ?: "[]"
+        return try {
+            val whitelist = org.json.JSONArray(whitelistJson)
+            val cleaned = phoneNumber.replace(Regex("[^0-9+]"), "")
+            for (i in 0 until whitelist.length()) {
+                val whiteNum = whitelist.getString(i).replace(Regex("[^0-9+]"), "")
+                if (cleaned.endsWith(whiteNum.takeLast(10)) || whiteNum.endsWith(cleaned.takeLast(10))) {
+                    return true
+                }
+            }
+            false
+        } catch (e: Exception) {
+            false
         }
     }
 

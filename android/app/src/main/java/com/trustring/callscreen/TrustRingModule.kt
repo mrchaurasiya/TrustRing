@@ -90,8 +90,82 @@ class TrustRingModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun removeBlockedCallEntries(numbers: ReadableArray, promise: Promise) {
+        val prefs = getPrefs()
+        val logJson = prefs.getString("blocked_log", "[]") ?: "[]"
+        val logArray = JSONArray(logJson)
+        val numbersToRemove = mutableSetOf<String>()
+        for (i in 0 until numbers.size()) {
+            numbersToRemove.add(numbers.getString(i))
+        }
+        val newLog = JSONArray()
+        for (i in 0 until logArray.length()) {
+            val entry = logArray.getJSONObject(i)
+            if (!numbersToRemove.contains(entry.optString("number"))) {
+                newLog.put(entry)
+            }
+        }
+        prefs.edit()
+            .putString("blocked_log", newLog.toString())
+            .putInt("blocked_count", newLog.length())
+            .apply()
+        promise.resolve(true)
+    }
+
+    @ReactMethod
     fun getBlockedCount(promise: Promise) {
         promise.resolve(getPrefs().getInt("blocked_count", 0))
+    }
+
+    @ReactMethod
+    fun addToWhitelist(numbers: ReadableArray, promise: Promise) {
+        val prefs = getPrefs()
+        val existing = prefs.getString("whitelist", "[]") ?: "[]"
+        val whitelistArray = JSONArray(existing)
+        val existingSet = mutableSetOf<String>()
+        for (i in 0 until whitelistArray.length()) {
+            existingSet.add(whitelistArray.getString(i))
+        }
+        for (i in 0 until numbers.size()) {
+            val num = numbers.getString(i)
+            if (!existingSet.contains(num)) {
+                whitelistArray.put(num)
+                existingSet.add(num)
+            }
+        }
+        prefs.edit().putString("whitelist", whitelistArray.toString()).apply()
+        promise.resolve(true)
+    }
+
+    @ReactMethod
+    fun removeFromWhitelist(numbers: ReadableArray, promise: Promise) {
+        val prefs = getPrefs()
+        val existing = prefs.getString("whitelist", "[]") ?: "[]"
+        val whitelistArray = JSONArray(existing)
+        val toRemove = mutableSetOf<String>()
+        for (i in 0 until numbers.size()) {
+            toRemove.add(numbers.getString(i))
+        }
+        val newList = JSONArray()
+        for (i in 0 until whitelistArray.length()) {
+            val num = whitelistArray.getString(i)
+            if (!toRemove.contains(num)) {
+                newList.put(num)
+            }
+        }
+        prefs.edit().putString("whitelist", newList.toString()).apply()
+        promise.resolve(true)
+    }
+
+    @ReactMethod
+    fun getWhitelist(promise: Promise) {
+        val existing = getPrefs().getString("whitelist", "[]") ?: "[]"
+        val whitelistArray = JSONArray(existing)
+        val result = Arguments.createArray()
+        for (i in 0 until whitelistArray.length()) {
+            result.pushString(whitelistArray.getString(i))
+        }
+        promise.resolve(result)
     }
 
     @ReactMethod

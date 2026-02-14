@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "msjsdiag.vscode-react-native",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "fwcd.kotlin",
+    "vscjava.vscode-java-pack",
+    "naumovs.color-highlight",
+    "formulahendry.auto-rename-tag",
+    "streetsidesoftware.code-spell-checker"
+  ]
+}

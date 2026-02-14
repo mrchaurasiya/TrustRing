@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach to React Native (Android)",
+      "cwd": "${workspaceFolder}",
+      "type": "reactnative",
+      "request": "attach",
+      "platform": "android",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "webpack:///./~/*": "${workspaceFolder}/node_modules/*",
+        "webpack:///./*": "${workspaceFolder}/*"
+      }
+    },
+    {
+      "name": "Debug Android",
+      "cwd": "${workspaceFolder}",
+      "type": "reactnative",
+      "request": "launch",
+      "platform": "android",
+      "sourceMaps": true
+    }
+  ]
+}

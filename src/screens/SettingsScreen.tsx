@@ -10,7 +10,10 @@ import {
   StatusBar,
 } from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
-import TrustRingService from '../services/TrustRingService';
+import TrustRingService, {
+  SimPreference,
+  SimSlotInfo,
+} from '../services/TrustRingService';
 import {checkPermissions, requestAllPermissions} from '../utils/permissions';
 import {COLORS} from '../constants';
 
@@ -51,6 +54,12 @@ export default function SettingsScreen() {
     phone: false,
     callLog: false,
   });
+  const [simPref, setSimPref] = useState<SimPreference>('BOTH');
+  const [simInfo, setSimInfo] = useState<SimSlotInfo>({
+    simCount: 0,
+    sim1Carrier: 'SIM 1',
+    sim2Carrier: 'SIM 2',
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -59,12 +68,16 @@ export default function SettingsScreen() {
   );
 
   const loadSettings = async () => {
-    const [roleHeld, perms] = await Promise.all([
+    const [roleHeld, perms, currentSimPref, currentSimInfo] = await Promise.all([
       TrustRingService.isCallScreeningRoleHeld(),
       checkPermissions(),
+      TrustRingService.getSimBlockingPreference(),
+      TrustRingService.getSimSlotInfo(),
     ]);
     setHasRole(roleHeld);
     setPermissions(perms);
+    setSimPref(currentSimPref);
+    setSimInfo(currentSimInfo);
   };
 
   const handleRequestRole = async () => {
@@ -81,6 +94,11 @@ export default function SettingsScreen() {
   const handleRequestPermissions = async () => {
     const result = await requestAllPermissions();
     setPermissions(result);
+  };
+
+  const handleSelectSim = async (preference: SimPreference) => {
+    setSimPref(preference);
+    await TrustRingService.setSimBlockingPreference(preference);
   };
 
   return (
@@ -128,6 +146,80 @@ export default function SettingsScreen() {
             <Text style={styles.actionBtnText}>Set as Default</Text>
           </TouchableOpacity>
         )}
+      </View>
+
+      {/* Target SIM Selection */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardIcon}>📱</Text>
+          <View style={styles.cardHeaderText}>
+            <Text style={styles.cardTitle}>Target SIM Preference</Text>
+            <Text style={styles.cardSubtitle}>
+              Select which SIM card unknown call blocking applies to
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.simList}>
+          <TouchableOpacity
+            style={[
+              styles.simOptionRow,
+              simPref === 'BOTH' && styles.simOptionRowSelected,
+            ]}
+            onPress={() => handleSelectSim('BOTH')}
+            activeOpacity={0.7}>
+            <View style={styles.simRadioCircle}>
+              {simPref === 'BOTH' && <View style={styles.simRadioDot} />}
+            </View>
+            <View style={styles.simOptionTextWrap}>
+              <Text style={styles.simOptionTitle}>Apply to Both SIMs</Text>
+              <Text style={styles.simOptionDesc}>
+                Block unknown callers on SIM 1 and SIM 2 (Default behavior)
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.simOptionRow,
+              simPref === 'SIM_1' && styles.simOptionRowSelected,
+            ]}
+            onPress={() => handleSelectSim('SIM_1')}
+            activeOpacity={0.7}>
+            <View style={styles.simRadioCircle}>
+              {simPref === 'SIM_1' && <View style={styles.simRadioDot} />}
+            </View>
+            <View style={styles.simOptionTextWrap}>
+              <Text style={styles.simOptionTitle}>
+                Apply to SIM 1 {simInfo.sim1Carrier !== 'SIM 1' ? `(${simInfo.sim1Carrier})` : ''}
+              </Text>
+              <Text style={styles.simOptionDesc}>
+                Block unknown callers on SIM 1 only; allow all incoming calls on SIM 2
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.simOptionRow,
+              styles.simOptionRowLast,
+              simPref === 'SIM_2' && styles.simOptionRowSelected,
+            ]}
+            onPress={() => handleSelectSim('SIM_2')}
+            activeOpacity={0.7}>
+            <View style={styles.simRadioCircle}>
+              {simPref === 'SIM_2' && <View style={styles.simRadioDot} />}
+            </View>
+            <View style={styles.simOptionTextWrap}>
+              <Text style={styles.simOptionTitle}>
+                Apply to SIM 2 {simInfo.sim2Carrier !== 'SIM 2' ? `(${simInfo.sim2Carrier})` : ''}
+              </Text>
+              <Text style={styles.simOptionDesc}>
+                Block unknown callers on SIM 2 only; allow all incoming calls on SIM 1
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Permissions */}
@@ -260,6 +352,57 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '700',
     fontSize: 14,
+  },
+
+  // SIM Selection
+  simList: {
+    backgroundColor: COLORS.background,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  simOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    backgroundColor: COLORS.surface,
+  },
+  simOptionRowLast: {
+    borderBottomWidth: 0,
+  },
+  simOptionRowSelected: {
+    backgroundColor: COLORS.primaryGlow,
+  },
+  simRadioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  simRadioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+  },
+  simOptionTextWrap: {
+    flex: 1,
+  },
+  simOptionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  simOptionDesc: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    lineHeight: 16,
   },
 
   // Permissions

@@ -1,16 +1,27 @@
 package com.trustring.callscreen
 
 import android.content.ContentResolver
+import android.content.Context
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.provider.ContactsContract
 import android.telecom.Call
 import android.telecom.CallScreeningService
-import android.content.SharedPreferences
+import android.telecom.PhoneAccountHandle
+import android.telecom.TelecomManager
+import android.telephony.SubscriptionManager
+import android.telephony.TelephonyManager
 import org.json.JSONObject
 import java.util.Calendar
 
 class TrustRingCallScreeningService : CallScreeningService() {
+
+    private enum class SimSlot {
+        SIM_1, // Slot index 0
+        SIM_2, // Slot index 1
+        UNKNOWN
+    }
 
     override fun onScreenCall(callDetails: Call.Details) {
         val handle = callDetails.handle
@@ -19,11 +30,35 @@ class TrustRingCallScreeningService : CallScreeningService() {
         val prefs = getSharedPreferences("TrustRingPrefs", MODE_PRIVATE)
         val isEnabled = prefs.getBoolean("blocking_enabled", false)
 
+        // ALLOW REASON: Blocking is globally disabled in app settings or phone number is empty.
         if (!isEnabled || phoneNumber.isEmpty()) {
             respondToCall(callDetails, CallResponse.Builder().build())
             return
         }
 
+        // --- PER-SIM BLOCKING EVALUATION ---
+        // How SIM is identified:
+        // 1. Reads user's per-SIM preference from SharedPreferences ("BOTH", "SIM_1", or "SIM_2").
+        // 2. Extracts Call.Details.accountHandle (PhoneAccountHandle).
+        // 3. Resolves subscription ID via TelecomManager, TelephonyManager.createForPhoneAccountHandle(),
+        //    and SubscriptionManager to determine simSlotIndex (0 for SIM 1, 1 for SIM 2).
+        val simPref = prefs.getString("sim_blocking_preference", "BOTH") ?: "BOTH"
+        val callSimSlot = getSimSlotForCall(callDetails)
+
+        // Evaluate whether the call blocking rule applies to the SIM that received this call
+        val shouldApplyBlocking = when (simPref) {
+            "SIM_1" -> callSimSlot == SimSlot.SIM_1 || (callSimSlot == SimSlot.UNKNOWN && isSingleSimDevice())
+            "SIM_2" -> callSimSlot == SimSlot.SIM_2
+            else -> true // "BOTH" or default: applies to both SIMs
+        }
+
+        // ALLOW REASON: User configured call blocking to target the other SIM card.
+        if (!shouldApplyBlocking) {
+            respondToCall(callDetails, CallResponse.Builder().build())
+            return
+        }
+
+        // ALLOW REASON: Incoming call arrived outside active scheduled hours.
         val isInSchedule = isWithinSchedule(prefs)
         if (!isInSchedule) {
             respondToCall(callDetails, CallResponse.Builder().build())
@@ -34,10 +69,10 @@ class TrustRingCallScreeningService : CallScreeningService() {
         val isWhitelisted = isNumberWhitelisted(prefs, phoneNumber)
 
         if (isKnown || isWhitelisted) {
-            // Allow the call
+            // ALLOW REASON: Phone number is in device contacts or user whitelist.
             respondToCall(callDetails, CallResponse.Builder().build())
         } else {
-            // Block the call
+            // BLOCK REASON: Call is from an unknown/unsaved contact on the selected SIM during active schedule.
             val response = CallResponse.Builder()
                 .setDisallowCall(true)
                 .setRejectCall(true)
@@ -47,6 +82,110 @@ class TrustRingCallScreeningService : CallScreeningService() {
 
             respondToCall(callDetails, response)
             logBlockedCall(prefs, phoneNumber)
+        }
+    }
+
+    /**
+     * Dynamically identifies which SIM slot (SIM 1 or SIM 2) received the incoming call.
+     * 
+     * Identification Algorithm:
+     * 1. Reads callDetails.accountHandle (PhoneAccountHandle).
+     * 2. On Android 8.0+ / 10+, uses TelephonyManager.createForPhoneAccountHandle(accountHandle)
+     *    to get a pinned TelephonyManager and its subscriptionId.
+     * 3. Queries SubscriptionManager for active SubscriptionInfo list to obtain simSlotIndex
+     *    (0 = SIM 1, 1 = SIM 2).
+     * 4. Fallback: Matches accountHandle.id against active subscription IDs or ICCID strings.
+     * 5. Fallback for single SIM devices: If 1 active SIM is present, maps to SIM 1.
+     * 
+     * Manufacturer Limitations:
+     * - Vendor customizations (e.g. Samsung OneUI, Xiaomi MIUI, ColorOS) or dual-SIM clone devices
+     *   may pass non-standard PhoneAccountHandle IDs. Iteration over active SubscriptionInfo items handles this.
+     * - If READ_PHONE_STATE permission is missing or revoked, active subscription list may return null;
+     *   in that case, SimSlot.UNKNOWN is returned and fallback logic applies.
+     */
+    private fun getSimSlotForCall(callDetails: Call.Details): SimSlot {
+        val accountHandle: PhoneAccountHandle? = callDetails.accountHandle
+
+        try {
+            val subscriptionManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
+            val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+
+            val activeSubscriptions = try {
+                subscriptionManager?.activeSubscriptionInfoList
+            } catch (e: SecurityException) {
+                null
+            }
+
+            // Method 1: Pin TelephonyManager using accountHandle (Android 8.0+ / 10+)
+            if (accountHandle != null && telephonyManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
+                    val pinnedTelephonyManager = telephonyManager.createForPhoneAccountHandle(accountHandle)
+                    if (pinnedTelephonyManager != null) {
+                        val subId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            pinnedTelephonyManager.subscriptionId
+                        } else {
+                            accountHandle.id.toIntOrNull() ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                        }
+
+                        if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID && activeSubscriptions != null) {
+                            for (info in activeSubscriptions) {
+                                if (info.subscriptionId == subId) {
+                                    return when (info.simSlotIndex) {
+                                        0 -> SimSlot.SIM_1
+                                        1 -> SimSlot.SIM_2
+                                        else -> SimSlot.UNKNOWN
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Fall back to handle ID matching
+                }
+            }
+
+            // Method 2: Match PhoneAccountHandle.id against active subscription metadata
+            if (accountHandle != null && activeSubscriptions != null) {
+                val handleId = accountHandle.id
+                for (info in activeSubscriptions) {
+                    val subIdStr = info.subscriptionId.toString()
+                    val iccId = info.iccId ?: ""
+                    val cardString = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) info.cardString ?: "" else ""
+
+                    if (handleId == subIdStr || handleId.contains(subIdStr) ||
+                        (iccId.isNotEmpty() && handleId.contains(iccId)) ||
+                        (cardString.isNotEmpty() && handleId.contains(cardString))) {
+                        return when (info.simSlotIndex) {
+                            0 -> SimSlot.SIM_1
+                            1 -> SimSlot.SIM_2
+                            else -> SimSlot.UNKNOWN
+                        }
+                    }
+                }
+            }
+
+            // Method 3: Single active SIM fallback
+            if (activeSubscriptions != null && activeSubscriptions.size == 1) {
+                return when (activeSubscriptions[0].simSlotIndex) {
+                    0 -> SimSlot.SIM_1
+                    1 -> SimSlot.SIM_2
+                    else -> SimSlot.UNKNOWN
+                }
+            }
+        } catch (e: Exception) {
+            // Safeguard against telephony exceptions
+        }
+
+        return SimSlot.UNKNOWN
+    }
+
+    private fun isSingleSimDevice(): Boolean {
+        return try {
+            val subscriptionManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
+            val activeSubscriptions = subscriptionManager?.activeSubscriptionInfoList
+            activeSubscriptions?.size == 1
+        } catch (e: Exception) {
+            false
         }
     }
 

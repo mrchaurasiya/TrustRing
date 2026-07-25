@@ -2,6 +2,14 @@ import {NativeModules, Platform} from 'react-native';
 
 const {TrustRingModule} = NativeModules;
 
+export type SimPreference = 'BOTH' | 'SIM_1' | 'SIM_2';
+
+export interface SimSlotInfo {
+  simCount: number;
+  sim1Carrier: string;
+  sim2Carrier: string;
+}
+
 export interface Schedule {
   startHour: number;
   startMinute: number;
@@ -28,6 +36,28 @@ class TrustRingService {
       return false;
     }
     return TrustRingModule.isBlockingEnabled();
+  }
+
+  async setSimBlockingPreference(preference: SimPreference): Promise<boolean> {
+    if (Platform.OS !== 'android') {
+      return false;
+    }
+    await TrustRingModule.setSimBlockingPreference(preference);
+    return true;
+  }
+
+  async getSimBlockingPreference(): Promise<SimPreference> {
+    if (Platform.OS !== 'android') {
+      return 'BOTH';
+    }
+    return TrustRingModule.getSimBlockingPreference();
+  }
+
+  async getSimSlotInfo(): Promise<SimSlotInfo> {
+    if (Platform.OS !== 'android') {
+      return { simCount: 0, sim1Carrier: 'SIM 1', sim2Carrier: 'SIM 2' };
+    }
+    return TrustRingModule.getSimSlotInfo();
   }
 
   async setSchedule(schedule: Schedule): Promise<boolean> {

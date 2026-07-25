@@ -74,6 +74,7 @@ export const STORAGE_KEYS = {
   BLOCKED_LOG: 'blocked_log',
   FIRST_LAUNCH: 'first_launch',
   WHITELIST: 'whitelist',
+  SIM_BLOCKING_PREFERENCE: 'sim_blocking_preference',
 };
 
 export const DEFAULT_SCHEDULE = {

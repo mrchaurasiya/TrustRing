@@ -4,6 +4,7 @@ import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.telephony.SubscriptionManager
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import org.json.JSONArray
@@ -26,6 +27,57 @@ class TrustRingModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun isBlockingEnabled(promise: Promise) {
         promise.resolve(getPrefs().getBoolean("blocking_enabled", false))
+    }
+
+    @ReactMethod
+    fun setSimBlockingPreference(preference: String, promise: Promise) {
+        getPrefs().edit().putString("sim_blocking_preference", preference).apply()
+        promise.resolve(preference)
+    }
+
+    @ReactMethod
+    fun getSimBlockingPreference(promise: Promise) {
+        promise.resolve(getPrefs().getString("sim_blocking_preference", "BOTH") ?: "BOTH")
+    }
+
+    @ReactMethod
+    fun getSimSlotInfo(promise: Promise) {
+        try {
+            val subscriptionManager = reactApplicationContext.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
+            val activeSubscriptions = try {
+                subscriptionManager?.activeSubscriptionInfoList
+            } catch (e: SecurityException) {
+                null
+            }
+
+            val map = Arguments.createMap()
+            val simCount = activeSubscriptions?.size ?: 0
+            map.putInt("simCount", simCount)
+
+            var sim1Carrier = "SIM 1"
+            var sim2Carrier = "SIM 2"
+
+            if (activeSubscriptions != null) {
+                for (info in activeSubscriptions) {
+                    val carrierName = info.carrierName?.toString() ?: "SIM ${info.simSlotIndex + 1}"
+                    if (info.simSlotIndex == 0) {
+                        sim1Carrier = carrierName
+                    } else if (info.simSlotIndex == 1) {
+                        sim2Carrier = carrierName
+                    }
+                }
+            }
+
+            map.putString("sim1Carrier", sim1Carrier)
+            map.putString("sim2Carrier", sim2Carrier)
+            promise.resolve(map)
+        } catch (e: Exception) {
+            val map = Arguments.createMap()
+            map.putInt("simCount", 0)
+            map.putString("sim1Carrier", "SIM 1")
+            map.putString("sim2Carrier", "SIM 2")
+            promise.resolve(map)
+        }
     }
 
     @ReactMethod

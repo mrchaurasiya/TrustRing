@@ -21,6 +21,8 @@ export interface Schedule {
 export interface BlockedCallEntry {
   number: string;
   timestamp: number;
+  simSlot?: string;
+  targetSimPref?: string;
 }
 
 class TrustRingService {

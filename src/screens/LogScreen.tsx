@@ -20,6 +20,8 @@ interface GroupedCall {
   count: number;
   lastTimestamp: number;
   timestamps: number[];
+  simSlot?: string;
+  targetSimPref?: string;
 }
 
 function groupCalls(calls: BlockedCallEntry[]): GroupedCall[] {
@@ -34,6 +36,8 @@ function groupCalls(calls: BlockedCallEntry[]): GroupedCall[] {
       if (call.timestamp > existing.lastTimestamp) {
         existing.lastTimestamp = call.timestamp;
         existing.number = call.number;
+        existing.simSlot = call.simSlot;
+        existing.targetSimPref = call.targetSimPref;
       }
     } else {
       map.set(key, {
@@ -41,6 +45,8 @@ function groupCalls(calls: BlockedCallEntry[]): GroupedCall[] {
         count: 1,
         lastTimestamp: call.timestamp,
         timestamps: [call.timestamp],
+        simSlot: call.simSlot,
+        targetSimPref: call.targetSimPref,
       });
     }
   }
@@ -140,6 +146,15 @@ const CallItem = React.memo(
     const digits = item.number.replace(/\D/g, '');
     const initials = digits.length >= 2 ? digits.slice(-2) : digits || '#';
 
+    const simLabel =
+      item.simSlot === 'SIM_1'
+        ? 'SIM 1'
+        : item.simSlot === 'SIM_2'
+        ? 'SIM 2'
+        : item.simSlot === 'UNKNOWN'
+        ? 'SIM ?'
+        : null;
+
     return (
       <Animated.View style={{transform: [{scale: scaleAnim}]}}>
         <TouchableOpacity
@@ -173,6 +188,25 @@ const CallItem = React.memo(
               {item.count > 1 && (
                 <View style={styles.countChip}>
                   <Text style={styles.countChipText}>({item.count})</Text>
+                </View>
+              )}
+              {simLabel && (
+                <View
+                  style={[
+                    styles.simChip,
+                    item.simSlot === 'UNKNOWN'
+                      ? styles.simChipUnknown
+                      : styles.simChipKnown,
+                  ]}>
+                  <Text
+                    style={[
+                      styles.simChipText,
+                      item.simSlot === 'UNKNOWN'
+                        ? styles.simChipTextUnknown
+                        : styles.simChipTextKnown,
+                    ]}>
+                    {simLabel}
+                  </Text>
                 </View>
               )}
             </View>
@@ -620,6 +654,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.danger,
     fontWeight: '700',
+  },
+  simChip: {
+    marginLeft: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  simChipKnown: {
+    backgroundColor: 'rgba(8, 145, 178, 0.12)',
+  },
+  simChipUnknown: {
+    backgroundColor: 'rgba(234, 179, 8, 0.15)',
+  },
+  simChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  simChipTextKnown: {
+    color: COLORS.primary,
+  },
+  simChipTextUnknown: {
+    color: COLORS.warning,
   },
   callMetaRow: {flexDirection: 'row', alignItems: 'center'},
   callBlockedIcon: {

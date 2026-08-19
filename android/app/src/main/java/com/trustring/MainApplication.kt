@@ -11,6 +11,7 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
+import com.trustring.callscreen.SimCallTracker
 import com.trustring.callscreen.TrustRingPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -40,6 +41,14 @@ class MainApplication : Application(), ReactApplication {
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       // If you opted-in for the New Architecture, we load the native entry point for this app.
       load()
+    }
+
+    // Initialize per-SIM call state tracking so we know which SIM is ringing
+    // before CallScreeningService.onScreenCall() fires
+    try {
+      SimCallTracker.initialize(this)
+    } catch (e: Exception) {
+      android.util.Log.d("TrustRing", "SimCallTracker init error: ${e.message}")
     }
   }
 }

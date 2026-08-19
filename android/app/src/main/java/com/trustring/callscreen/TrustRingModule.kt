@@ -127,6 +127,12 @@ class TrustRingModule(reactContext: ReactApplicationContext) :
             val map = Arguments.createMap()
             map.putString("number", entry.optString("number"))
             map.putDouble("timestamp", entry.optLong("timestamp").toDouble())
+            if (entry.has("simSlot")) {
+                map.putString("simSlot", entry.optString("simSlot"))
+            }
+            if (entry.has("targetSimPref")) {
+                map.putString("targetSimPref", entry.optString("targetSimPref"))
+            }
             result.pushMap(map)
         }
         promise.resolve(result)
